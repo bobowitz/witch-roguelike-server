@@ -16,11 +16,8 @@ let get_new_player_id = () => {
 };
 
 io.on('connection', (socket) => {
-  console.log('connection');
-
   let pid = get_new_player_id();
   socket.emit('welcome', seed, pid);
-  console.log('player_ids ', player_ids);
 
   socket.broadcast.emit('player connected', pid);
 
@@ -31,8 +28,6 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     player_ids = player_ids.filter(x => x !== pid);
     socket.broadcast.emit('player disconnected', pid);
-    console.log('disconnect');
-    console.log('player_ids ', player_ids);
   });
 });
 

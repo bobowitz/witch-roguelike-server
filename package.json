@@ -2,9 +2,8 @@
   "name": "witch-roguelike-server",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
   "scripts": {
-    "watch": "webpack --watch"
+    "start": "node src/main.js"
   },
   "keywords": [],
   "author": "",
@@ -13,5 +12,8 @@
     "express": "^4.17.1",
     "socket.io": "^3.0.1"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "engines": {
+    "node": "14.x"
+  }
 }
