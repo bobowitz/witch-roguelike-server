@@ -8,11 +8,10 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devDependencies": {
+  "dependencies": {
     "express": "^4.17.1",
     "socket.io": "^3.0.1"
   },
-  "dependencies": {},
   "engines": {
     "node": "14.x"
   }
