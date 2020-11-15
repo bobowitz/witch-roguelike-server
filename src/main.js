@@ -28,7 +28,7 @@ io.on('connection', (socket) => {
   socket.broadcast.emit('player connected', pid);
 
   socket.on('input', (tick_player_id, input) => {
-    socket.broadcast.emit('input', tick_player_id, input);
+    io.emit('input', tick_player_id, input);
   });
 
   socket.on('disconnect', () => {
