@@ -26,6 +26,11 @@ io.on('connection', (socket) => {
   console.log('connection', player_ids);
 
   socket.broadcast.emit('player connected', pid);
+  io.emit('chat message', 'player ' + pid + ' connected');
+
+  socket.on('chat message', message => {
+    io.emit('chat message', message);
+  });
 
   socket.on('input', (tick_player_id, input) => {
     io.emit('input', tick_player_id, input);
@@ -34,6 +39,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     player_ids = player_ids.filter(x => x !== pid);
     socket.broadcast.emit('player disconnected', pid);
+    io.emit('chat message', 'player ' + pid + ' disconnected');
     console.log('disconnect', player_ids);
   });
 });
