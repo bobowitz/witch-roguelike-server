@@ -63,7 +63,7 @@ const db = new Client({
 db.connect();
 
 const createTableQuery = `
-CREATE TABLE IF NOT EXISTS data (
+CREATE TABLE IF NOT EXISTS jsondata (
   id TEXT NOT NULL PRIMARY KEY,
   data JSONB NOT NULL
 )
@@ -75,7 +75,7 @@ async function db_get(id) {
   const [row] = await db.query(
     `
       SELECT data
-      FROM my_data
+      FROM jsondata
       WHERE id=$1
     `, [id]
   );
@@ -84,7 +84,7 @@ async function db_get(id) {
 
 async function db_set(id, value) {
   await db.query(`
-    INSERT INTO my_data (id, data)
+    INSERT INTO jsondata (id, data)
     VALUES ($1, $2)
     ON CONFLICT id
     DO UPDATE SET data = EXCLUDED.data;
