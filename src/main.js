@@ -60,7 +60,7 @@ const db = new Client({
   }
 });
 
-db.connect();
+db.connect().catch(e => console.log('Error in db.connect: ', e));
 
 const createTableQuery = `
 CREATE TABLE IF NOT EXISTS jsondata (
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS jsondata (
 )
 `
 
-db.query(createTableQuery);
+db.query(createTableQuery).catch(e => console.log('Error in db.query(createTableQuery): ', e));
 
 async function db_get(id) {
   const [row] = await db.query('SELECT data FROM jsondata WHERE id=$1', [id]);
@@ -82,8 +82,12 @@ async function db_set(id, value) {
 
 m.acquire().then(release => {
   let db_logins = db_get('logins');
+  console.log('logins: ');
+  console.log(db_logins);
   if (db_logins) player_logins = db_logins;
   let db_worlds = db_get('worlds');
+  console.log('worlds: ');
+  console.log(db_worlds);
   if (db_worlds) worlds = db_worlds;
   release();
 });
