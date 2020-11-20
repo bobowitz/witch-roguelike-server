@@ -72,24 +72,12 @@ CREATE TABLE IF NOT EXISTS jsondata (
 db.query(createTableQuery);
 
 async function db_get(id) {
-  const [row] = await db.query(
-    `
-      SELECT data
-      FROM jsondata
-      WHERE id=$1
-    `, [id]
-  );
+  const [row] = await db.query('SELECT data FROM jsondata WHERE id=$1', [id]);
   return row ? row.data : null;
 }
 
 async function db_set(id, value) {
-  await db.query(`
-    INSERT INTO jsondata (id, data)
-    VALUES ($1, $2)
-    ON CONFLICT id
-    DO UPDATE SET data = EXCLUDED.data;
-  `, [id, value]
-  );
+  await db.query('INSERT INTO jsondata (id, data) VALUES ($1, $2) ON CONFLICT id DO UPDATE SET data = EXCLUDED.data;', [id, value]);
 }
 
 m.acquire().then(release => {
