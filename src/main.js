@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS data (
 )
 `
 
-await db.query(createTableQuery);
+db.query(createTableQuery);
 
 async function db_get(id) {
   const [row] = await db.query(
