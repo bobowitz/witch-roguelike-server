@@ -77,7 +77,7 @@ async function db_get(id) {
       SELECT data
       FROM my_data
       WHERE id=$1
-    `, id
+    `, [id]
   );
   return row ? row.data : null;
 }
