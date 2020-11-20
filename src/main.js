@@ -81,11 +81,6 @@ let get_world_codes = (username) => {
   return available_world_codes;
 }
 
-let w = new World();
-w.invitePlayer('bobowitz');
-worlds[get_new_world_key()] = w;
-
-
 io.on('connection', (socket) => {
   socket.emit('new connect');
 
