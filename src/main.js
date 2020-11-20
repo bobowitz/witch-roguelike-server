@@ -73,22 +73,23 @@ db.query(createTableQuery);
 
 async function db_get(id) {
   const [row] = await db.query(
-    sql`
+    `
       SELECT data
       FROM my_data
-      WHERE id=${id}
-    `
+      WHERE id=$1
+    `, id
   );
   return row ? row.data : null;
 }
 
 async function db_set(id, value) {
-  await db.query(sql`
+  await db.query(`
     INSERT INTO my_data (id, data)
-    VALUES (${id}, ${value})
+    VALUES ($1, $2)
     ON CONFLICT id
     DO UPDATE SET data = EXCLUDED.data;
-  `);
+  `, [id, value]
+  );
 }
 
 m.acquire().then(release => {
