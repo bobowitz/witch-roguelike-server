@@ -1,7 +1,9 @@
-let app = require('express')();
-let http = require('http').createServer(app);
-let io = require('socket.io')(http);
-let bcrypt = require('bcrypt');
+const app = require('express')();
+const http = require('http').createServer(app);
+const io = require('socket.io')(http);
+const bcrypt = require('bcrypt');
+const { Client } = require('pg');
+const { Mutex } = require('async-mutex');
 
 class PlayerLogin {
   constructor(username, password) {
@@ -10,7 +12,7 @@ class PlayerLogin {
   }
 }
 
-class Player {
+class ActivePlayer {
   constructor(socket, username) {
     this.socket = socket;
     this.username = username;
@@ -45,17 +47,66 @@ class World {
   }
 }
 
-player_logins = [];
-worlds = {};
-activePlayers = {}; // activePlayers[socket.id] = ActivePlayer
+let player_logins = [];
+let worlds = {};
+let activePlayers = {}; // activePlayers[socket.id] = ActivePlayer
+const m = new Mutex();
 
-let get_new_player_id = () => {
-  let id = 0;
-  for (l of player_logins) {
-    if (l.pid >= id) id = l.pid + 1;
+// postgres
+const db = new Client({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
   }
-  return id;
-};
+});
+
+db.connect();
+
+const createTableQuery = `
+CREATE TABLE IF NOT EXISTS data (
+  id TEXT NOT NULL PRIMARY KEY,
+  data JSONB NOT NULL
+)
+`
+
+await db.query(createTableQuery);
+
+async function db_get(id) {
+  const [row] = await db.query(
+    sql`
+      SELECT data
+      FROM my_data
+      WHERE id=${id}
+    `
+  );
+  return row ? row.data : null;
+}
+
+async function db_set(id, value) {
+  await db.query(sql`
+    INSERT INTO my_data (id, data)
+    VALUES (${id}, ${value})
+    ON CONFLICT id
+    DO UPDATE SET data = EXCLUDED.data;
+  `);
+}
+
+m.acquire().then(release => {
+  let db_logins = db_get('logins');
+  if (db_logins) player_logins = db_logins;
+  let db_worlds = db_get('worlds');
+  if (db_worlds) worlds = db_worlds;
+  release();
+});
+
+let save_server_state = () => {
+  m.acquire().then(release => {
+    db_set('logins', player_logins);
+    db_set('worlds', worlds);
+    release();
+  });
+}
+setTimeout(save_server_state, 60000);
 
 let get_new_world_key = () => {
   let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -90,11 +141,11 @@ io.on('connection', (socket) => {
       if (activePlayers[sid]) names.push(activePlayers[sid].username);
       else names.push('NULL');
     }
-    console.log(names);
+    console.log('active: ', names);
   }
 
   let on_successful_login = (username) => {
-    activePlayers[socket.id] = new Player(socket, username);
+    activePlayers[socket.id] = new ActivePlayer(socket, username);
     socket.emit('logged in');
     list_active_users();
   }
@@ -132,7 +183,11 @@ io.on('connection', (socket) => {
     } else {
       bcrypt.hash(password, 8, (err, hash) => {
         let player_login = new PlayerLogin(username, hash);
-        player_logins.push(player_login);
+        m.acquire().then(release => {
+          player_logins.push(player_login);
+          release();
+        });
+        save_server_state();
         on_successful_login(player_login.username);
       });
     }
@@ -150,7 +205,11 @@ io.on('connection', (socket) => {
       let world = new World();
       world.invitePlayer(activePlayers[socket.id].username);
       activePlayers[socket.id].currentWorld = world;
-      worlds[get_new_world_key()] = world;
+      m.acquire().then(release => {
+        worlds[get_new_world_key()] = world;
+        release();
+      });
+      save_server_state();
       socket.emit('welcome', world.gameState);
       broadcast_to_world('chat message', activePlayers[socket.id].username + ' joined');
     }
@@ -166,7 +225,6 @@ io.on('connection', (socket) => {
         let waiting_for_state_update = false;
         for (let sid in activePlayers) {
           if (activePlayers[sid].currentWorld === worlds[world_code]) {
-            console.log('queueing...');
             activePlayers[sid].socket.emit('get state');
             worlds[world_code].join_queue.push(socket.id);
             waiting_for_state_update = true;
@@ -174,7 +232,6 @@ io.on('connection', (socket) => {
           }
         }
         if (!waiting_for_state_update) {
-          console.log('joined with no queue');
           activePlayers[socket.id].currentWorld = worlds[world_code];
           socket.emit('welcome', worlds[world_code].gameState);
           broadcast_to_world_others('player joined', activePlayers[socket.id].username);
@@ -224,10 +281,13 @@ io.on('connection', (socket) => {
 
   socket.on('game state', (state) => {
     if (activePlayers[socket.id] && activePlayers[socket.id].currentWorld) {
-      activePlayers[socket.id].currentWorld.gameState = state;
+      m.acquire().then(release => {
+        activePlayers[socket.id].currentWorld.gameState = state;
+        release();
+      });
+      save_server_state();
       while (activePlayers[socket.id].currentWorld.join_queue.length > 0) {
         const sid = activePlayers[socket.id].currentWorld.join_queue.pop();
-        console.log('transmitting new game state from ' + activePlayers[socket.id].username + ' to ' + activePlayers[sid].username);
         if (activePlayers[sid]) {
           activePlayers[sid].currentWorld = activePlayers[socket.id].currentWorld;
           activePlayers[sid].socket.emit('welcome', state);
