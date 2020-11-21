@@ -16,7 +16,7 @@ class ActivePlayer {
   constructor(socket, username) {
     this.socket = socket;
     this.username = username;
-    this.currentWorld = undefined;
+    this.currentWorldCode = '';
 
     this.x = 0;
     this.y = 0;
@@ -179,7 +179,7 @@ io.on('connection', (socket) => {
   let broadcast_to_world = (...args) => {
     if (activePlayers[socket.id]) {
       for (let sid in activePlayers) {
-        if (activePlayers[sid].currentWorld === activePlayers[socket.id].currentWorld)
+        if (worlds[activePlayers[sid].currentWorldCode] === worlds[activePlayers[socket.id].currentWorldCode])
           activePlayers[sid].socket.emit(...args);
       }
     }
@@ -188,7 +188,7 @@ io.on('connection', (socket) => {
   let broadcast_to_world_others = (...args) => { // doesn't broadcast to self
     if (activePlayers[socket.id]) {
       for (let sid in activePlayers) {
-        if (sid !== socket.id && activePlayers[sid].currentWorld === activePlayers[socket.id].currentWorld)
+        if (sid !== socket.id && worlds[activePlayers[sid].currentWorldCode] === worlds[activePlayers[socket.id].currentWorldCode])
           activePlayers[sid].socket.emit(...args);
       }
     }
@@ -230,9 +230,10 @@ io.on('connection', (socket) => {
     if (activePlayers[socket.id]) {
       let world = new World();
       world.invitePlayer(activePlayers[socket.id].username);
-      activePlayers[socket.id].currentWorld = world;
       m.acquire().then(release => {
-        worlds[get_new_world_key()] = world;
+        let k = get_new_world_key();
+        worlds[k] = world;
+        activePlayers[socket.id].currentWorldCode = k;
         release();
       });
       save_server_state();
@@ -246,11 +247,11 @@ io.on('connection', (socket) => {
   socket.on('join world', world_code => {
     if (activePlayers[socket.id]) {
       let p = activePlayers[socket.id];
-      p.currentWorld = undefined;
+      p.currentWorldCode = '';
       if (world_code in worlds && worlds[world_code].isInvited(activePlayers[socket.id].username)) {
         let waiting_for_state_update = false;
         for (let sid in activePlayers) {
-          if (activePlayers[sid].currentWorld === worlds[world_code]) {
+          if (activePlayers[sid].currentWorldCode === world_code) {
             activePlayers[sid].socket.emit('get state');
             worlds[world_code].join_queue.push(socket.id);
             waiting_for_state_update = true;
@@ -258,7 +259,7 @@ io.on('connection', (socket) => {
           }
         }
         if (!waiting_for_state_update) {
-          activePlayers[socket.id].currentWorld = worlds[world_code];
+          activePlayers[socket.id].currentWorldCode = world_code;
           socket.emit('welcome', worlds[world_code].gameState);
           broadcast_to_world_others('player joined', activePlayers[socket.id].username);
           broadcast_to_world('chat message', activePlayers[socket.id].username + ' joined');
@@ -270,19 +271,19 @@ io.on('connection', (socket) => {
   });
 
   socket.on('leave world', () => {
-    if (activePlayers[socket.id] && activePlayers[socket.id].currentWorld) {
+    if (activePlayers[socket.id] && worlds[activePlayers[socket.id].currentWorldCode]) {
       broadcast_to_world_others('player left', activePlayers[socket.id].username);
       broadcast_to_world_others('chat message', activePlayers[socket.id].username + " left");
-      activePlayers[socket.id].currentWorld = null;
+      activePlayers[socket.id].currentWorldCode = '';
     } else
       socket.emit('unrecognized session');
   });
 
   socket.on('invite', username => {
-    if (activePlayers[socket.id] && activePlayers[socket.id].currentWorld) {
+    if (activePlayers[socket.id] && worlds[activePlayers[socket.id].currentWorldCode]) {
       let chatMessage = "invited " + username;
       if (player_logins.filter(l => l.username === username).length > 0)
-        activePlayers[socket.id].currentWorld.invitePlayer(username);
+        worlds[activePlayers[socket.id].currentWorldCode].invitePlayer(username);
       else
         chatMessage = "user does not exist";
       broadcast_to_world('chat message', chatMessage);
@@ -292,33 +293,33 @@ io.on('connection', (socket) => {
   });
 
   socket.on('chat message', message => {
-    if (activePlayers[socket.id] && activePlayers[socket.id].currentWorld)
+    if (activePlayers[socket.id] && worlds[activePlayers[socket.id].currentWorldCode])
       broadcast_to_world('chat message', activePlayers[socket.id].username + ': ' + message);
     else
       socket.emit('unrecognized session');
   });
 
   socket.on('input', (tick_player_id, input) => {
-    if (activePlayers[socket.id] && activePlayers[socket.id].currentWorld)
+    if (activePlayers[socket.id] && worlds[activePlayers[socket.id].currentWorldCode])
       broadcast_to_world('input', tick_player_id, input);
     else
       socket.emit('unrecognized session');
   });
 
   socket.on('game state', (state) => {
-    if (activePlayers[socket.id] && activePlayers[socket.id].currentWorld) {
+    if (activePlayers[socket.id] && worlds[activePlayers[socket.id].currentWorldCode]) {
       m.acquire().then(release => {
-        activePlayers[socket.id].currentWorld.gameState = state;
+        worlds[activePlayers[socket.id].currentWorldCode].gameState = state;
         release();
       });
       save_server_state();
-      while (activePlayers[socket.id].currentWorld.join_queue.length > 0) {
-        const sid = activePlayers[socket.id].currentWorld.join_queue.pop();
+      while (worlds[activePlayers[socket.id].currentWorldCode].join_queue.length > 0) {
+        const sid = worlds[activePlayers[socket.id].currentWorldCode].join_queue.pop();
         if (activePlayers[sid]) {
-          activePlayers[sid].currentWorld = activePlayers[socket.id].currentWorld;
+          activePlayers[sid].currentWorldCode = activePlayers[socket.id].currentWorldCode;
           activePlayers[sid].socket.emit('welcome', state);
           for (let other_sid in activePlayers) {
-            if (other_sid !== sid && activePlayers[other_sid].currentWorld === activePlayers[sid].currentWorld)
+            if (other_sid !== sid && activePlayers[other_sid].currentWorldCode === activePlayers[sid].currentWorldCode)
               activePlayers[other_sid].socket.emit('player joined', activePlayers[sid].username);
           }
           broadcast_to_world('chat message', activePlayers[sid].username + ' joined');
@@ -330,7 +331,7 @@ io.on('connection', (socket) => {
   });
 
   let logout = () => {
-    if (activePlayers[socket.id] && activePlayers[socket.id].currentWorld) {
+    if (activePlayers[socket.id] && worlds[activePlayers[socket.id].currentWorldCode]) {
       broadcast_to_world_others('player left', activePlayers[socket.id].username);
       broadcast_to_world_others('chat message', activePlayers[socket.id].username + " left");
     }
