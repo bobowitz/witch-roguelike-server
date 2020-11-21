@@ -139,11 +139,12 @@ let save_server_state = (message) => {
     console.log('saved');
   });
 }
+
 let interval_save = () => {
   save_server_state('60 seconds elapsed, saving...');
-  if (Object.keys(activePlayers).length > 0) setTimeout(interval_save, 60000);
 }
-setTimeout(interval_save, 60000);
+let interval_save_on = true;
+let interval_save_timeout = setInterval(interval_save, 60000);
 
 let get_new_world_key = () => {
   let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -185,6 +186,10 @@ io.on('connection', (socket) => {
     activePlayers[socket.id] = new ActivePlayer(socket, username);
     socket.emit('logged in');
     list_active_users();
+    if (!interval_save_on) {
+      interval_save_on = true;
+      let interval_save_timeout = setInterval(interval_save, 60000);
+    }
   }
 
   let get_active_users = (world_code) => {
@@ -360,6 +365,11 @@ io.on('connection', (socket) => {
     }
     delete activePlayers[socket.id];
     list_active_users();
+    // server is empty, stop auto save
+    if (Object.keys(activePlayers).length === 0) {
+      interval_save_on = false;
+      clearInterval(interval_save_timeout);
+    }
   };
 
   socket.on('logout', logout);
