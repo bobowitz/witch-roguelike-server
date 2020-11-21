@@ -27,13 +27,18 @@ class ActivePlayer {
 class World {
   constructor() {
     this.invitedPlayers = [];
-    this.players = {};
     this.join_queue = [];
     this.gameState = {
       seed: (Math.random() * 4294967296) >>> 0,
       randomState: (Math.random() * 4294967296) >>> 0,
       init_state: true
     };
+  }
+
+  copyFrom = (otherWorld) => {
+    this.invitedPlayers = otherWorld.invitedPlayers;
+    this.join_queue = otherWorld.join_queue;
+    this.gameState = otherWorld.gameState;
   }
 
   invitePlayer = (username) => {
@@ -47,10 +52,23 @@ class World {
   }
 }
 
+// server state
 let player_logins = [];
 let worlds = {};
 let activePlayers = {}; // activePlayers[socket.id] = ActivePlayer
+let lastSavedTime = 0;
+let serverStartTime = new Date();
 const m = new Mutex();
+
+// status page
+app.get('/status', (req, res) => {
+  let s = 'server started at ' + serverStartTime.toLocaleString();
+  let a = 'active players: ' + Object.values(activePlayers).map(ap => ap.username).toString();
+  let l = 'registered players: ' + player_logins.map(l => l.username).toString();
+  let w = 'worlds:<br>' + Object.keys(worlds).map(k => '    ' + k + ' ' + worlds[k].invitedPlayers.toString());
+  let d = lastSavedTime === 0 ? 'have not written to db yet' : ('db written on ' + lastSavedTime.toLocaleString());
+  res.send(`<pre><code>${s}<br>${a}<br>${l}<br>${w}<br>${d}</code></pre>`);
+});
 
 // postgres
 const db = new Client({
@@ -65,38 +83,53 @@ db.connect().catch(e => console.log('Error in db.connect: ', e));
 const createTableQuery = `
 CREATE TABLE IF NOT EXISTS jsondata (
   id TEXT NOT NULL PRIMARY KEY,
-  data JSONB NOT NULL
+  data TEXT NOT NULL
 )
 `
 
 db.query(createTableQuery).catch(e => console.log('Error in db.query(createTableQuery): ', e));
 
 async function db_get(id) {
-  const [row] = await db.query('SELECT data FROM jsondata WHERE id=$1', [id]);
+  const result = await db.query('SELECT data FROM jsondata WHERE id=$1', [id]);
+  const [row] = result.rows;
   return row ? row.data : null;
 }
 
 async function db_set(id, value) {
-  await db.query('INSERT INTO jsondata (id, data) VALUES ($1, $2) ON CONFLICT id DO UPDATE SET data = EXCLUDED.data;', [id, value]);
+  await db.query('INSERT INTO jsondata (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data;', [id, value]);
 }
 
+// load server state from db
 m.acquire().then(release => {
-  let db_logins = db_get('logins');
-  console.log('logins: ');
-  console.log(db_logins);
-  if (db_logins) player_logins = db_logins;
-  let db_worlds = db_get('worlds');
-  console.log('worlds: ');
-  console.log(db_worlds);
-  if (db_worlds) worlds = db_worlds;
-  release();
+  db_get('logins').then(db_logins => {
+    if (db_logins) {
+      player_logins = JSON.parse(db_logins);
+      console.log('loaded existing logins from db:', player_logins.map(l => l.username));
+    }
+  }).catch(e => console.log('<WRS> error getting logins:', e));
+  db_get('worlds').then(db_worlds => {
+    if (db_worlds) {
+      let otherWorlds = JSON.parse(db_worlds);
+      worlds = {};
+      for (const k in otherWorlds) {
+        let w = new World();
+        w.copyFrom(otherWorlds[k]);
+        worlds[k] = w;
+      }
+      console.log('loaded existing worlds from db', Object.keys(worlds));
+    }
+    release();
+  }).catch(e => console.log('<WRS> error getting worlds:', e));
 });
 
 let save_server_state = () => {
+  console.log('saving...');
   m.acquire().then(release => {
-    db_set('logins', player_logins);
-    db_set('worlds', worlds);
+    db_set('logins', JSON.stringify(player_logins)).catch(e => console.log('<WRS> error setting logins:', e));
+    db_set('worlds', JSON.stringify(worlds)).catch(e => console.log('<WRS> error setting worlds:', e));
     release();
+    lastSavedTime = new Date();
+    console.log('saved');
   });
 }
 setTimeout(save_server_state, 60000);
