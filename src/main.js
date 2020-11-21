@@ -299,9 +299,9 @@ io.on('connection', (socket) => {
       socket.emit('unrecognized session');
   });
 
-  socket.on('input', (tick_player_id, input) => {
+  socket.on('input', (tick_player_id, input, randState) => {
     if (activePlayers[socket.id] && worlds[activePlayers[socket.id].currentWorldCode])
-      broadcast_to_world('input', tick_player_id, input);
+      broadcast_to_world('input', tick_player_id, input, randState);
     else
       socket.emit('unrecognized session');
   });
