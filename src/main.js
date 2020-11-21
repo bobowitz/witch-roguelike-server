@@ -139,7 +139,11 @@ let save_server_state = (message) => {
     console.log('saved');
   });
 }
-setInterval(() => { save_server_state('60 seconds elapsed, saving...'); }, 60000);
+let interval_save = () => {
+  save_server_state('60 seconds elapsed, saving...');
+  if (Object.keys(activePlayers).length > 0) setTimeout(interval_save, 60000);
+}
+setTimeout(interval_save, 60000);
 
 let get_new_world_key = () => {
   let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
