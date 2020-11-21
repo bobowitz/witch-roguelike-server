@@ -74,7 +74,7 @@ app.get('/status', (req, res) => {
 
 // postgres
 const db = new Client({
-  connectionString: 'postgres://tlvithyqohacll:344d17742330b4bd62bfe54bfe408241d9473b61baf4d82dac61bb2d355eca74@ec2-52-5-176-53.compute-1.amazonaws.com:5432/d23ldbn6o3qcpg',
+  connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
   }
