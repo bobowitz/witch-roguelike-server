@@ -65,20 +65,26 @@ app.get('/status', (req, res) => {
   let s = 'server started at ' + serverStartTime.toLocaleString();
   let a = 'active players: ' + Object.values(activePlayers).map(ap => ap.username).toString();
   let l = 'registered players: ' + player_logins.map(l => l.username).toString();
-  let w = 'worlds:' + Object.keys(worlds).map(k => '<br>    ' + k + ' ' + worlds[k].invitedPlayers.toString());
+  let worlds_string = '';
+  Object.keys(worlds).map(k => '<br>    ' + k + ' [' + worlds[k].invitedPlayers.length + '] ' + worlds[k].invitedPlayers.toString()).forEach(line => worlds_string += line);
+  let w = 'worlds:' + worlds_string;
   let d = lastSavedTime === 0 ? 'have not written to db yet' : ('db written on ' + lastSavedTime.toLocaleString());
   res.send(`<pre><code>${s}<br>${a}<br>${l}<br>${w}<br>${d}</code></pre>`);
 });
 
 // postgres
 const db = new Client({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: 'postgres://tlvithyqohacll:344d17742330b4bd62bfe54bfe408241d9473b61baf4d82dac61bb2d355eca74@ec2-52-5-176-53.compute-1.amazonaws.com:5432/d23ldbn6o3qcpg',
   ssl: {
     rejectUnauthorized: false
   }
 });
 
 db.connect().catch(e => console.log('Error in db.connect: ', e));
+
+const dropTableQuery = `
+DROP TABLE jsondata
+`
 
 const createTableQuery = `
 CREATE TABLE IF NOT EXISTS jsondata (
@@ -87,6 +93,7 @@ CREATE TABLE IF NOT EXISTS jsondata (
 )
 `
 
+//db.query(dropTableQuery).catch(e => console.log('Error in db.query(dropTableQuery): ', e));
 db.query(createTableQuery).catch(e => console.log('Error in db.query(createTableQuery): ', e));
 
 async function db_get(id) {
@@ -121,8 +128,9 @@ m.acquire().then(release => {
   }).catch(e => console.log('<WRS> error getting worlds:', e));
 });
 
-let save_server_state = () => {
-  console.log('saving...');
+let save_server_state = (message) => {
+  if (message) console.log(message);
+  else console.log('saving...');
   m.acquire().then(release => {
     db_set('logins', JSON.stringify(player_logins)).catch(e => console.log('<WRS> error setting logins:', e));
     db_set('worlds', JSON.stringify(worlds)).catch(e => console.log('<WRS> error setting worlds:', e));
@@ -131,7 +139,7 @@ let save_server_state = () => {
     console.log('saved');
   });
 }
-setTimeout(save_server_state, 60000);
+setInterval(() => { save_server_state('60 seconds elapsed, saving...'); }, 60000);
 
 let get_new_world_key = () => {
   let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -173,6 +181,16 @@ io.on('connection', (socket) => {
     activePlayers[socket.id] = new ActivePlayer(socket, username);
     socket.emit('logged in');
     list_active_users();
+  }
+
+  let get_active_users = (world_code) => {
+    let active_users_in_world = [];
+    for (let sid in activePlayers) {
+      if (activePlayers[sid].currentWorldCode === world_code) {
+        active_users_in_world.push(activePlayers[sid].username);
+      }
+    }
+    return active_users_in_world;
   }
 
   let broadcast_to_world = (...args) => {
@@ -236,7 +254,7 @@ io.on('connection', (socket) => {
         release();
       });
       save_server_state();
-      socket.emit('welcome', world.gameState);
+      socket.emit('welcome', [], world.gameState);
       broadcast_to_world('chat message', activePlayers[socket.id].username + ' joined');
     }
     else
@@ -259,7 +277,7 @@ io.on('connection', (socket) => {
         }
         if (!waiting_for_state_update) {
           activePlayers[socket.id].currentWorldCode = world_code;
-          socket.emit('welcome', worlds[world_code].gameState);
+          socket.emit('welcome', get_active_users(world_code), worlds[world_code].gameState);
           broadcast_to_world_others('player joined', activePlayers[socket.id].username);
           broadcast_to_world('chat message', activePlayers[socket.id].username + ' joined');
         }
@@ -307,11 +325,13 @@ io.on('connection', (socket) => {
 
   socket.on('game state', (state) => {
     if (activePlayers[socket.id] && worlds[activePlayers[socket.id].currentWorldCode]) {
+      // capture for this async update
+      let world_code_to_update = activePlayers[socket.id].currentWorldCode;
       m.acquire().then(release => {
-        worlds[activePlayers[socket.id].currentWorldCode].gameState = state;
+        worlds[world_code_to_update].gameState = state;
         release();
+        save_server_state();
       });
-      save_server_state();
       while (worlds[activePlayers[socket.id].currentWorldCode].join_queue.length > 0) {
         const sid = worlds[activePlayers[socket.id].currentWorldCode].join_queue.pop();
         if (activePlayers[sid]) {
