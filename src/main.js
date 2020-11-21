@@ -143,8 +143,9 @@ let save_server_state = (message) => {
 let interval_save = () => {
   save_server_state('60 seconds elapsed, saving...');
 }
-let interval_save_on = true;
-let interval_save_timeout = setInterval(interval_save, 60000);
+let interval_save_on = false;
+let interval_save_timeout;
+const SAVE_INTERVAL = 60000;
 
 let get_new_world_key = () => {
   let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -188,7 +189,7 @@ io.on('connection', (socket) => {
     list_active_users();
     if (!interval_save_on) {
       interval_save_on = true;
-      let interval_save_timeout = setInterval(interval_save, 60000);
+      interval_save_timeout = setInterval(interval_save, SAVE_INTERVAL);
     }
   }
 
