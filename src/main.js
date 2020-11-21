@@ -110,13 +110,12 @@ m.acquire().then(release => {
   db_get('worlds').then(db_worlds => {
     if (db_worlds) {
       let otherWorlds = JSON.parse(db_worlds);
-      worlds = {};
       for (const k in otherWorlds) {
         let w = new World();
         w.copyFrom(otherWorlds[k]);
         worlds[k] = w;
       }
-      console.log('loaded existing worlds from db', Object.keys(worlds));
+      console.log('loaded existing worlds from db', Object.keys(otherWorlds));
     }
     release();
   }).catch(e => console.log('<WRS> error getting worlds:', e));
