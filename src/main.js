@@ -65,7 +65,7 @@ app.get('/status', (req, res) => {
   let s = 'server started at ' + serverStartTime.toLocaleString();
   let a = 'active players: ' + Object.values(activePlayers).map(ap => ap.username).toString();
   let l = 'registered players: ' + player_logins.map(l => l.username).toString();
-  let w = 'worlds:<br>' + Object.keys(worlds).map(k => '    ' + k + ' ' + worlds[k].invitedPlayers.toString());
+  let w = 'worlds:' + Object.keys(worlds).map(k => '<br>    ' + k + ' ' + worlds[k].invitedPlayers.toString());
   let d = lastSavedTime === 0 ? 'have not written to db yet' : ('db written on ' + lastSavedTime.toLocaleString());
   res.send(`<pre><code>${s}<br>${a}<br>${l}<br>${w}<br>${d}</code></pre>`);
 });
