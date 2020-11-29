@@ -88,8 +88,8 @@ DROP TABLE jsondata
 
 const createTableQuery = `
 CREATE TABLE IF NOT EXISTS jsondata (
-  id TEXT NOT NULL PRIMARY KEY,
-  data TEXT NOT NULL
+id TEXT NOT NULL PRIMARY KEY,
+data TEXT NOT NULL
 )
 `
 
@@ -346,7 +346,7 @@ io.on('connection', (socket) => {
         const sid = worlds[activePlayers[socket.id].currentWorldCode].join_queue.pop();
         if (activePlayers[sid]) {
           activePlayers[sid].currentWorldCode = activePlayers[socket.id].currentWorldCode;
-          activePlayers[sid].socket.emit('welcome', state);
+          activePlayers[sid].socket.emit('welcome', get_active_users(world_code), state);
           for (let other_sid in activePlayers) {
             if (other_sid !== sid && activePlayers[other_sid].currentWorldCode === activePlayers[sid].currentWorldCode)
               activePlayers[other_sid].socket.emit('player joined', activePlayers[sid].username);
