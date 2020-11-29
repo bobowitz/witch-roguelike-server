@@ -346,7 +346,7 @@ io.on('connection', (socket) => {
         const sid = worlds[activePlayers[socket.id].currentWorldCode].join_queue.pop();
         if (activePlayers[sid]) {
           activePlayers[sid].currentWorldCode = activePlayers[socket.id].currentWorldCode;
-          activePlayers[sid].socket.emit('welcome', get_active_users(world_code), state);
+          activePlayers[sid].socket.emit('welcome', get_active_users(activePlayers[socket.id].currentWorldCode), state);
           for (let other_sid in activePlayers) {
             if (other_sid !== sid && activePlayers[other_sid].currentWorldCode === activePlayers[sid].currentWorldCode)
               activePlayers[other_sid].socket.emit('player joined', activePlayers[sid].username);
