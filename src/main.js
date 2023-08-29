@@ -73,12 +73,15 @@ app.get('/status', (req, res) => {
 });
 
 // postgres
-const db = new Client({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
+var conn= new Client(
+  {
+    host: process.env.AZURE_POSTGRESQL_HOST,
+    user: process.env.AZURE_POSTGRESQL_USER,
+    password: process.env.AZURE_POSTGRESQL_PASSWORD,
+    database: process.env.AZURE_POSTGRESQL_DATABASE,
+    port: process.env.AZURE_POSTGRESQL_PORT,
   }
-});
+);
 
 db.connect().catch(e => console.log('Error in db.connect: ', e));
 
