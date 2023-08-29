@@ -80,7 +80,7 @@ let db = new Client(
     password: process.env.AZURE_POSTGRESQL_PASSWORD,
     database: process.env.AZURE_POSTGRESQL_DATABASE,
     port: process.env.AZURE_POSTGRESQL_PORT,
-    ssl: true,
+    ssl: process.env.AZURE_POSTGRESQL_SSL,
   }
 );
 
