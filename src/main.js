@@ -73,7 +73,7 @@ app.get('/status', (req, res) => {
 });
 
 // postgres
-var conn= new Client(
+let db = new Client(
   {
     host: process.env.AZURE_POSTGRESQL_HOST,
     user: process.env.AZURE_POSTGRESQL_USER,
